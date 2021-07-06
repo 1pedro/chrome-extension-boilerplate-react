@@ -1,0 +1,102 @@
+
+li.pending a div {
+  font-weight: 900;
+  color: red !important;
+}
+
+
+li.scrapping a div {
+  font-weight: 900;
+  color: blue !important;
+}
+
+li.finished a div {
+  font-weight: 900;
+  color: green !important;
+}
+
+
+.base-modal {
+  box-shadow: rgba(0, 0, 0, 0.24) 0px 3px 8px;
+  position: fixed;
+  top: 30%;
+  left: 50%;
+  margin-top: -100px; /* Negative half of height. */
+  margin-left: -250px; /* Negative half of width. */
+  background-color: #222222;
+  text-align: center;
+  border-radius: 20px;
+}
+
+.base-modal h1 {
+  color: #c1c1c1;
+  font-weight: 600;
+}
+
+.base-modal span {
+  color:#43b94d;
+}
+.base-modal head {
+  width: 100%;
+}
+
+.body-send {
+  display: flex;
+  flex-direction: column;
+  width: 70%;
+  margin: auto;
+}
+
+.body-send input {
+  border-radius: 10px;
+  width: 250px;
+  margin: 10px auto;
+  text-align: center;
+  color: #222222;
+}
+
+.body-send button {
+  width: 200px;
+  margin: auto;
+}
+
+.base-modal #close {
+  width: 50px !important;
+  background-color: transparent;
+  border: none;
+  display: block;
+  float: right;
+  align-self: flex-end;
+}
+
+
+.body-download {
+  display: flex;
+  justify-content: space-evenly;
+}
+
+#bepro ul li{
+  color: #c1c1c1;
+
+}
+
+#bepro .btn-primary {
+  width: 250px;
+  margin: auto;
+  background-color: #464646;
+  margin-top:10px;
+}
+
+#bepro ul {
+  list-style:none;
+}
+
+.custom-modal {
+  display: block;
+  position: fixed;
+  width: 100%;
+  height: 100%;
+  top: 0;
+  left:0;
+  background-color: #bbbaba8f;
+}
