@@ -1,7 +1,7 @@
 {
-  "name": "watt-pad-to-kindle",
-  "version": "4.0.1",
-  "description": "A chrome extension boilerplate built with React 17 and Webpack 5",
+  "name": "wattpad-to-kindle",
+  "version": "0.0.1",
+  "description": "Send Wattpad™ story's to your Amazon™ Kindle device or download it as Epub, PDF or Mobi.",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -15,15 +15,11 @@
   },
   "dependencies": {
     "@gilbarbara/helpers": "^0.3.0",
-    "@types/uuid": "^8.3.1",
     "assert": "^2.0.0",
     "autoprefixer": "^10.2.6",
     "extpay": "^2.3.0",
     "is-lite": "^0.8.0",
     "jepub": "github:1pedro/jepub",
-    "jest": "^27.0.6",
-    "jspdf": "^2.3.1",
-    "jszip": "^3.6.0",
     "path-browserify": "^1.0.1",
     "postcss": "^8.3.5",
     "react": "^17.0.1",
@@ -34,6 +30,8 @@
     "uuid": "^8.3.2"
   },
   "devDependencies": {
+    "@types/uuid": "^8.3.1",
+    "jest": "^27.0.6",
     "@babel/core": "^7.14.6",
     "@babel/eslint-parser": "^7.14.7",
     "@babel/eslint-plugin": "^7.14.5",

@@ -1,3 +1,5 @@
+// noinspection ExceptionCaughtLocallyJS
+
 import { logger } from '@gilbarbara/helpers';
 // @ts-ignore
 import Jepub from 'jepub';
@@ -14,7 +16,10 @@ import {
   getUrlFromFile,
   handleConvert,
   makeId,
+  sendMessage,
+  sendToKindle,
   sleep,
+  toBase64,
 } from '../../modules/helpers';
 import { get, set } from '../../modules/localStorage';
 import { BlobImage, BuildEpub, Chapter } from '../../types';
@@ -23,23 +28,13 @@ let file: Blob | null = null;
 let err: string | null = null;
 const month = `${new Date().getMonth()}/${new Date().getFullYear()}`;
 const ext = ExtPay('wattpad-to-kindle-e-reader');
-const PRE_STYLE = `-webkit-text-size-adjust: 100%;
-    -webkit-tap-highlight-color: transparent;
-    -webkit-font-smoothing: antialiased;
-    -webkit-box-direction: normal;
-    box-sizing: border-box;
-    overflow: auto;
-    margin: 12px 0 21px;
-    white-space: pre-wrap;
-    word-wrap: break-word;
-    font-family: "Source Sans Pro","Helvetica Neue",Helvetica,Arial,sans-serif;
-    color: #121212;
-    font-style: normal;
-    font-weight: 400;
-    font-size: 16px;
-    line-height: 22px;`;
 
 let abort = false;
+let STAGE = '';
+
+(async () => {
+  STAGE = (await sendMessage('getStage', {})) as string;
+})();
 
 async function getPart(url: string): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -49,7 +44,7 @@ async function getPart(url: string): Promise<string> {
   });
 }
 
-export async function scrapeFlow(isPro: boolean) {
+export async function scrapeFlow(isPro: boolean, subscriptionStatus: string) {
   abort = false;
   const { exportsMade = {}, kindleEmail = '' } =
     (await get(['exportsMade', 'kindleEmail'])) || {};
@@ -161,7 +156,6 @@ export async function scrapeFlow(isPro: boolean) {
 
       if (!panel && !abort) {
         err = `Could not get content from chapter ${part.innerText}. Try again.`;
-        // eslint-disable-next-line no-continue
         throw new Error(err);
       }
 
@@ -174,9 +168,6 @@ export async function scrapeFlow(isPro: boolean) {
       if ([...panel.querySelectorAll('img')].length && !abort) {
         const images = [...panel.querySelectorAll('img')] as HTMLImageElement[];
 
-        // eslint-disable-next-line no-param-reassign
-        console.log('isPro', isPro);
-
         try {
           // eslint-disable-next-line no-await-in-loop
           const parsedImages = await getImages(images, isPro, false);
@@ -188,8 +179,12 @@ export async function scrapeFlow(isPro: boolean) {
         }
       }
 
+      const content = panel.innerHTML
+        .replaceAll('<pre>', '')
+        .replaceAll('</pre>', '');
+
       chapters.push({
-        content: panel.innerHTML,
+        content,
         title: part?.innerText,
       });
 
@@ -223,6 +218,7 @@ export async function scrapeFlow(isPro: boolean) {
     (await downloadBookPanel(
       getUrlFromFile(file),
       isPro,
+      subscriptionStatus,
       exportsMade,
       kindleEmail
     ));
@@ -269,11 +265,8 @@ async function buildEpub(input: BuildEpub) {
   }
 
   return jepub.generate('blob', (metadata: any) => {
+    // eslint-disable-next-line no-console
     console.log(`progression: ${metadata.percent.toFixed(2)} %`);
-
-    if (metadata.currentFile) {
-      console.log(`current file = ${metadata.currentFile}`);
-    }
   });
 }
 
@@ -338,7 +331,7 @@ async function toggleGenerating(isPro: boolean) {
     wrapper.classList.add('base-modal');
     wrapper.style.width = '500px';
     wrapper.style.height = '300px';
-    wrapper.innerHTML = `<h1> Scrapping... </h1> <br/> <span id="actualStory"> </span>
+    wrapper.innerHTML = `<h1> Scrapping content... </h1> <br/> <span id="actualStory"> </span>
     <br />
     <button class="btn-primary" id="abort" style=" background-color: #ff2f65; margin: 20px;"> Abort </button>
       <br />
@@ -378,6 +371,7 @@ async function handleAbort(event: Event) {
 async function downloadBookPanel(
   epubLink: string,
   isPro: boolean,
+  subscriptionStatus: string,
   exportsMade: any,
   kindleEmail: string
 ) {
@@ -417,10 +411,10 @@ async function downloadBookPanel(
   </div>
   
   <div class="body-send">
-    <input id="kindle-email" placeholder="email-kindle@kindle.com" value="${
+    <input id="kindle-email" type="email" placeholder="kindle-email@kindle.com" value="${
       kindleEmail || ''
     }"> </input>
-    <button class="btn-secondary" id="send"> Send to My Kindle 📲</button>
+    <button class="btn-secondary" id="send-book"> Send to My Kindle 📲</button>
     ${
       err
         ? `<span style="color:#ff1d1d;margin:auto; margin-top:0px;margin-bottom:0px; font-weight:600;" id="conversion-error"> One or more errors occurred. Try again. <br />  If persists contact us at contact@xstudio.digital </span>`
@@ -428,7 +422,7 @@ async function downloadBookPanel(
     }
   </div>
       
-  <h3 style="font-size:18px;margin-top:30px;"> Or Download as: </h3>
+  <h3 style="font-size:18px;margin-top:10px;margin-bottom:5px"> Or Download as: </h3>
   <div class="body-download">
     <div> <h2 style="margin-top:10px; color:#c1c1c1"><a href="#" id="mobi-download">  Mobi <span style="font-size:17px; color: #e64809 !important;">(Pro) </span> </a></h2></div>
     <div> <h2 style="margin-top:10px; color:#c1c1c1"><a href="${epubLink}" download="${
@@ -438,7 +432,7 @@ async function downloadBookPanel(
    </div>
    
    ${
-     !isPro
+     !isPro && subscriptionStatus !== 'past_due'
        ? `
    <span style="color:white;"> <img src="${chrome.runtime.getURL(
      'warning.png'
@@ -447,9 +441,24 @@ async function downloadBookPanel(
          } sends left. <br /> Click <a href="#" id="handlePro"> here </a> to upgrade your plan! </span>`
        : ''
    }
+   
+   ${
+     !isPro && subscriptionStatus === 'past_due'
+       ? `<span style="color:white;"> <img src="${chrome.runtime.getURL(
+           'warning.png'
+         )}" alt="warning"  style="width: 20px; margin-top: -5px; margin-right: 5px;"/> Your subscription has expired. Click <a href="#" id="renew">here </a> to renew your plan! </span>`
+       : ''
+   }
+   
+   
+   ${
+     isPro && subscriptionStatus === 'active'
+       ? `<span style="color:white;"> Click <a href="#" id="manage">here </a> to manage your subscription </span>`
+       : ''
+   }
   `;
   wrapper.style.color = '#c1c1c1';
-  wrapper.style.padding = '30px';
+  wrapper.style.padding = '10px';
   wrapper.style.width = '500px';
   wrapper.style.display = 'flex';
   wrapper.style.flexDirection = 'column';
@@ -459,7 +468,11 @@ async function downloadBookPanel(
   const mobiAction = document.querySelector('#mobi-download');
   const pdfAction = document.querySelector('#pdf-download');
   const closeAction = document.getElementById('close');
-  const sendAction = document.getElementById('send');
+  const sendAction = document.getElementById('send-book');
+
+  const renewAction = document.getElementById('renew');
+
+  const manageAction = document.getElementById('manage');
 
   const handlePro = document.getElementById('handlePro');
 
@@ -468,6 +481,11 @@ async function downloadBookPanel(
   if (mobiAction) {
     mobiAction.addEventListener('click', async (event) => {
       event.preventDefault();
+
+      const button = event.target as HTMLButtonElement;
+
+      button.innerText = `Converting ...`;
+
       const titleElement = document.querySelector(
         '.story-info__title'
       ) as HTMLElement;
@@ -488,14 +506,29 @@ async function downloadBookPanel(
           target.download = `${titleElement.innerText}.mobi`;
         }
       } else {
-        console.log('doing nothing');
+        logger(
+          'wattpad.ts',
+          'downloadBookPanel:usingPregeneratedMobiFile',
+          {},
+          { skip: HIDE_LOGS, typeColor: '#f00' }
+        );
       }
+
+      button.innerText = `Done`;
+
+      setTimeout(() => {
+        button.innerText = 'Mobi';
+      }, 5000);
     });
   }
 
   if (pdfAction) {
     pdfAction.addEventListener('click', async (event) => {
       event.preventDefault();
+
+      const button = event.target as HTMLButtonElement;
+
+      button.innerText = `Converting ...`;
 
       const titleElement = document.querySelector(
         '.story-info__title'
@@ -510,8 +543,19 @@ async function downloadBookPanel(
           target.download = `${titleElement.innerText}.pdf`;
         }
       } else {
-        console.log('doing nothing');
+        logger(
+          'wattpad.ts',
+          'downloadBookPanel:usingPregeneratedPDFFile',
+          {},
+          { skip: HIDE_LOGS, typeColor: '#f00' }
+        );
       }
+
+      button.innerText = `Done`;
+
+      setTimeout(() => {
+        button.innerText = 'PDF';
+      }, 5000);
     });
   }
 
@@ -531,9 +575,25 @@ async function downloadBookPanel(
     sendAction.addEventListener('click', async (event: Event) => {
       event.preventDefault();
 
+      const button = event.target as HTMLButtonElement;
+
+      button.innerText = 'Sending... ⏳';
+
       const kindleEmailInput = document.getElementById(
         'kindle-email'
       ) as HTMLInputElement;
+
+      const emailToSend =
+        kindleEmailInput && kindleEmailInput.value
+          ? kindleEmailInput.value.toLowerCase()
+          : null;
+
+      if (!emailToSend) {
+        // eslint-disable-next-line no-alert
+        alert('Provide a valid Email.');
+
+        return;
+      }
 
       logger(
         'wattpad.ts',
@@ -548,14 +608,64 @@ async function downloadBookPanel(
         }
       );
 
-      if (kindleEmailInput && kindleEmailInput.value) {
-        console.log('send');
-        await set({ kindleEmail: kindleEmailInput.value });
+      await set({ kindleEmail: emailToSend });
+
+      if (STAGE !== 'dev' && !kindleEmailInput.value.includes('@kindle')) {
+        // eslint-disable-next-line no-alert
+        alert('Provide a valid Kindle email.');
+
+        return;
       }
 
       if (!isPro && !hasExports) {
         beProFlow();
       }
+
+      if (file) {
+        const bookContent = await toBase64(file);
+
+        const email = kindleEmailInput.value;
+        const bookName = `${title.innerText.replace(
+          /[/\\?%*:|"<>.]/g,
+          '-'
+        )}.epub`;
+
+        try {
+          await sendToKindle(bookContent, bookName, email);
+
+          // eslint-disable-next-line no-alert
+          alert(
+            `The book was sent successfully to ${email}. Up to 5 minutes you will receive on your kindle.`
+          );
+        } catch (error) {
+          // eslint-disable-next-line no-alert
+          alert(
+            'Could not send. Try again later or contact us: contact@xstudio.digital'
+          );
+        }
+      }
+
+      button.innerText = 'Sent ✅';
+
+      setTimeout(() => {
+        button.innerText = 'Send Again to My Kindle 📲';
+      }, 5000);
+    });
+  }
+
+  if (renewAction) {
+    renewAction.addEventListener('click', async (event: Event) => {
+      event.preventDefault();
+
+      await sendMessage('handleRenew', {});
+    });
+  }
+
+  if (manageAction) {
+    manageAction.addEventListener('click', async (event: Event) => {
+      event.preventDefault();
+
+      await sendMessage('manageSubscription', {});
     });
   }
 }
@@ -576,7 +686,7 @@ async function beProFlow(event?: Event) {
     <li> Save Mobi on PC ✅</li>
   </ul>
   <span> Only 5$ /per month </span>
-  <button class="btn-primary" id="confirm-pro">🌟 Be pro 🌟</button>
+  <button class="btn-primary" id="confirm-pro">🌟 Be Pro 🌟</button>
   <button class="btn-primary" id="close-pro">Not now ❌</button>
   </div>
   `;
@@ -584,7 +694,7 @@ async function beProFlow(event?: Event) {
   wrapper.id = 'bepro';
   wrapper.style.width = '500px';
   wrapper.style.height = '360px';
-  wrapper.style.padding = '20px';
+  wrapper.style.padding = '15px';
   wrapper.classList.add('base-modal');
   wrapper.style.zIndex = '9999';
 
@@ -610,7 +720,10 @@ async function beProFlow(event?: Event) {
   }
 
   if (proAction) {
-    proAction.addEventListener('click', () => {
+    proAction.addEventListener('click', (evnt: Event) => {
+      const button = evnt.target as HTMLButtonElement;
+
+      button.innerText = `Initiating payment process.. ⏳`;
       ext.openPaymentPage();
     });
   }

@@ -1,11 +1,9 @@
 import { scrapeFlow } from './wattpad';
 
-// @ts-ignore
-// eslint-disable-next-line import/extensions
-// import { ExtPay } from '../../ExtPay.js';
 import { sendMessage } from '../../modules/helpers';
 
 function run() {
+  console.log('ryb');
   const interval = setInterval(async () => {
     const actions = document.querySelector('.story-actions') as HTMLElement;
 
@@ -24,9 +22,12 @@ function run() {
       btn.classList.add('btn-primary');
 
       btn.onclick = async () => {
-        const isPro = await sendMessage('getUserStatus', {});
+        const [isPro, subscriptionStatus] = (await sendMessage(
+          'getUserStatus',
+          {}
+        )) as [boolean, string];
 
-        await scrapeFlow(!!isPro);
+        await scrapeFlow(isPro, subscriptionStatus);
       };
 
       actions.appendChild(btn);
@@ -34,26 +35,8 @@ function run() {
     }
   }, 100);
 }
-// function addObserver() {
-//   var observer = new MutationObserver((mutations) => {
-//     mutations.forEach((mutation) => {
-//       if (document.querySelector('.story-actions')) {
-//         run();
-//
-//         observer.disconnect();
-//       }
-//     });
-//   });
-//
-//   observer.observe(document.body, {
-//     childList: true,
-//     subtree: true, // needed if the node you're targeting is not the direct parent
-//   });
-// }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log(message);
-
+chrome.runtime.onMessage.addListener((message) => {
   if (message.type === 'run') {
     run();
   }

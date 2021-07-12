@@ -1,25 +1,36 @@
-// @ts-ignore
-// eslint-disable-next-line import/extensions
-import { ExtPay } from '../../ExtPay.js';
+import { getUserStatus, manageSubscription } from '../../modules/helpers';
 
-async function getUserStatus() {
-  const ext = ExtPay('wattpad-to-kindle-e-reader');
+export async function getStage(): Promise<string> {
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
+    const mgmt = await chrome.management.getSelf();
 
-  // // await sleep(200);
-  // //
-  // // return true;
-  // console.log(ext);
-  // console.log('getUser');
-  const user = await ext.getUser();
-
-  return user.paid;
+    if (mgmt.installType === 'development') {
+      resolve('dev');
+    } else {
+      resolve('prod');
+    }
+  });
 }
 
 try {
   chrome.runtime.onMessage.addListener(
     (request: { data?: any; type: string }, sender: any, sendResponse: any) => {
+      console.log(request);
+
       if (request.type === 'getUserStatus') {
         getUserStatus().then((status) => sendResponse(status));
+      }
+
+      if (request.type === 'getStage') {
+        getStage().then((stage) => sendResponse(stage));
+      }
+
+      if (
+        request.type === 'manageSubscription' ||
+        request.type === 'handleRenew'
+      ) {
+        manageSubscription();
       }
 
       return true; // Will respond asynchronously.
@@ -31,8 +42,6 @@ try {
       async (tabId: number, changeInfo: any, tab: any) => {
         if (tab.url && tab.url.includes('wattpad.com')) {
           chrome.tabs.sendMessage(tabId, { type: 'run' });
-          // console.log('sending message');
-          // sendMessage('run', {});
         }
       }
     );

@@ -1,3 +1,14 @@
+import { CALIBRE_API_URL, MAIL_API_URL } from '../config';
+// @ts-ignore
+// eslint-disable-next-line import/extensions
+import { ExtPay } from '../ExtPay';
+
+let STAGE = '';
+
+(async () => {
+  STAGE = (await sendMessage('getStage', {})) as string;
+})();
+
 export function makeId(length: number) {
   let result = '';
   const characters =
@@ -58,18 +69,17 @@ export async function fetchImage(imgUrl: string) {
 export async function sendMessage(type: string, data: any) {
   return new Promise((resolve, reject) => {
     try {
-      console.log('sendingMessage');
       chrome.runtime.sendMessage({ type, data }, async (response) => {
         resolve(response);
       });
     } catch (error) {
-      console.log(error.message);
+      console.error(error.message);
       reject();
     }
   });
 }
 
-export function toBase64(blob: Blob) {
+export function toBase64(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
 
@@ -77,9 +87,26 @@ export function toBase64(blob: Blob) {
 
     // eslint-disable-next-line func-names
     reader.onloadend = function () {
-      resolve(reader.result);
+      if (reader.result) {
+        resolve(reader.result as string);
+      } else {
+        reject();
+      }
     };
   });
+}
+
+export async function getUserStatus() {
+  const ext = ExtPay('wattpad-to-kindle-e-reader');
+  const user = await ext.getUser();
+
+  return [user.paid, user.subscriptionStatus];
+}
+
+export async function manageSubscription() {
+  const ext = ExtPay('wattpad-to-kindle-e-reader');
+
+  await ext.openPaymentPage();
 }
 
 async function uploadFile(
@@ -109,7 +136,7 @@ async function uploadFile(
     );
 }
 
-export async function convertFile(
+export async function calibreConvertFile(
   file: Blob,
   title: string,
   from: string = 'epub',
@@ -121,7 +148,7 @@ export async function convertFile(
   formData.append('to', to);
 
   return new Promise((resolve, reject) => {
-    return fetch(`http://localhost:3002/calibre/ebook-convert`, {
+    return fetch(`${CALIBRE_API_URL}/calibre/ebook-convert`, {
       mode: 'cors',
       method: 'POST',
       body: formData,
@@ -151,7 +178,7 @@ export async function handleConvert(
 ): Promise<string | null> {
   if (file) {
     console.log('file', file);
-    const blob = await convertFile(
+    const blob = await calibreConvertFile(
       file,
       `${titleElement.innerText}.epub`,
       'epub',
@@ -194,4 +221,30 @@ export function getPlatform() {
     // @ts-ignore
     return typeof browser === 'undefined' ? window.chrome : browser;
   })();
+}
+
+export function sendToKindle(
+  bookContent: string,
+  bookName: string,
+  email: string,
+  subject = 'convert',
+  to = 'mobi',
+  textContent = '.'
+) {
+  if (!STAGE) {
+    throw new Error('No stage was provided');
+  }
+
+  return fetch(`${MAIL_API_URL}/${STAGE}/kindle`, {
+    mode: 'cors',
+    method: 'POST',
+    body: JSON.stringify({
+      bookContent,
+      bookName,
+      email,
+      subject,
+      to,
+      textContent,
+    }),
+  });
 }
